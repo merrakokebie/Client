@@ -175,9 +175,9 @@ namespace Project.ViewModels
             }
         }
     }
-}
 
-@model Project.ViewModels.PayPlusApprovalViewModel
+
+@model YourProject.ViewModels.PayPlusApprovalViewModel
 
 @{
     ViewBag.Title = "Funding Request Approval";
@@ -198,4 +198,176 @@ namespace Project.ViewModels
             <div class="small text-muted">Total pending amount</div>
             <div class="fs-5 fw-semibold">@Model.TotalWireAmount.ToString("C2")</div>
         </div>
+    </div>
+
+    @if (Model.IsPastCutoff)
+    {
+        <div class="alert alert-warning d-flex align-items-start" role="alert">
+            <div class="me-2">
+                <i class="fa fa-exclamation-triangle"></i>
+            </div>
+            <div>
+                <strong>5:10 PM wire cutoff has passed.</strong>
+                Before approving, these wires should be moved to
+                <strong>@Model.NextBusinessDate.ToString("dddd, MMMM d, yyyy")</strong>.
+            </div>
+        </div>
+    }
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+        <div class="text-muted small">
+            @Model.Wires.Count wire(s) ready to display
+        </div>
+        <button type="button" class="btn btn-primary" disabled>
+            <i class="fa fa-check me-1"></i>
+            Approve Selected
+        </button>
+    </div>
+
+    <div class="border rounded bg-white">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 approval-table">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:42px;">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="selectAll"
+                                   aria-label="Select all wires" />
+                        </th>
+                        <th>Client</th>
+                        <th>Borrower</th>
+                        <th>Loan Number</th>
+                        <th>Wire Date</th>
+                        <th class="text-end">Wire Amount</th>
+                        <th class="text-end">Note Amount</th>
+                        <th>Title Company</th>
+                        <th>Reference</th>
+                        <th>Initiator</th>
+                        <th class="text-center">Rush</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (Model.Wires.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="11" class="text-center py-5 text-muted">
+                                <div class="mb-2">
+                                    <i class="fa fa-inbox fa-2x"></i>
+                                </div>
+                                No wires are currently ready for approval.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var wire in Model.Wires)
+                        {
+                            <tr>
+                                <td>
+                                    <input class="form-check-input wire-checkbox"
+                                           type="checkbox"
+                                           value="@wire.PayPlusIntakeId" />
+                                </td>
+
+                                <td class="fw-semibold">@wire.ClientDisplay</td>
+
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(wire.BorrowerName)
+                                        ? "-"
+                                        : wire.BorrowerName)
+                                </td>
+
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(wire.LoanNumber)
+                                        ? "-"
+                                        : wire.LoanNumber)
+                                </td>
+
+                                <td class="text-nowrap">
+                                    @(wire.WireDate.HasValue
+                                        ? wire.WireDate.Value.ToString("MM/dd/yyyy")
+                                        : "-")
+                                </td>
+
+                                <td class="text-end text-nowrap fw-semibold">
+                                    @(wire.WireAmount.HasValue
+                                        ? wire.WireAmount.Value.ToString("C2")
+                                        : "-")
+                                </td>
+
+                                <td class="text-end text-nowrap">
+                                    @(wire.NoteAmount.HasValue
+                                        ? wire.NoteAmount.Value.ToString("C2")
+                                        : "-")
+                                </td>
+
+                                <td>@wire.TitleCompanyDisplay</td>
+
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(wire.SenderReferenceNumber)
+                                        ? "-"
+                                        : wire.SenderReferenceNumber)
+                                </td>
+
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(wire.InitiatorName)
+                                        ? "-"
+                                        : wire.InitiatorName)
+                                </td>
+
+                                <td class="text-center">
+                                    @if (wire.IsRushRequest)
+                                    {
+                                        <span class="badge bg-warning text-dark">Rush</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="small text-muted mt-2">
+        Bank time: @Model.BankNow.ToString("MM/dd/yyyy h:mm tt")
+        &nbsp;|&nbsp;
+        Cutoff: @Model.CutoffTime.ToString("h:mm tt")
+    </div>
+</div>
+
+<style>
+    .approval-table th {
+        white-space: nowrap;
+        font-size: 0.9rem;
+    }
+
+    .approval-table td {
+        vertical-align: middle;
+    }
+</style>
+
+<script>
+    (function () {
+        var selectAll = document.getElementById("selectAll");
+
+        if (!selectAll) {
+            return;
+        }
+
+        selectAll.addEventListener("change", function () {
+            var checkboxes = document.querySelectorAll(".wire-checkbox");
+
+            for (var i = 0; i < checkboxes.length; i++) {
+                checkboxes[i].checked = selectAll.checked;
+            }
+        });
+    })();
+</script>
 
