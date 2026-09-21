@@ -1,74 +1,15 @@
-USE [LoanTracking];
-GO
+The only thing stopping the re-close is 
+the inner guard — IF((@LPC <> @LDP) AND (@LDP > @LPC)) — 
+which blocks it because LastPeriodClosed is 
+now Sep 30 and the parameter is also Sep 30.
 
-SET XACT_ABORT ON;
-BEGIN TRANSACTION;
+IF (DAY(@LDP) = 1) BEGIN
+    DECLARE @PriorPeriodEnd DATETIME = DATEADD(day, -1, @LDP);
+    DECLARE @AlreadyClosed  DATETIME;
 
--- ── Safety net ────────────────────────────────────────────────
-SELECT * INTO LoanHistory_Bak_20260831
-FROM LoanHistory WHERE PeriodEndDate = '2026-08-31';
+    SELECT @AlreadyClosed = LastPeriodClosed
+    FROM Originator WHERE OriginatorID = @ID;
 
-SELECT * INTO CreditLineHistory_Bak_20260831
-FROM CreditLineHistory WHERE PeriodEndDate = '2026-08-31';
-
--- ── Clear Aug 31 ──────────────────────────────────────────────
-DELETE FROM LoanHistory       WHERE PeriodEndDate = '2026-08-31';
-DELETE FROM CreditLineHistory WHERE PeriodEndDate = '2026-08-31';
-
--- ── LoanHistory ───────────────────────────────────────────────
-INSERT INTO LoanHistory
-(
-    LoanID, PeriodEndDate, InterestAccrued, CheckFee, DaysOutstanding,
-    Over21Fee, WireFee, CheckOnlyFee, AdjustmentFee, AdjustmentInterest, [Keep]
-)
-SELECT
-    LoanID, PeriodEndDate, InterestAccrued, CheckFee, DaysOutstanding,
-    Over21Fee, WireFee, CheckOnlyFee, AdjustmentFee, AdjustmentInterest, [Keep]
-FROM [LoanTracking_X].[dbo].[LoanHistory]
-WHERE PeriodEndDate = '2026-08-31';
-
-SELECT @@ROWCOUNT AS LoanHistory_Inserted;
-
--- ── CreditLineHistory ─────────────────────────────────────────
-INSERT INTO CreditLineHistory
-(
-    CreditLineID, PeriodEndDate, PeriodInterest, PeriodFee, Balance,
-    PeriodAdjustmentInterest, Rate, Fee, PrimeLibor, PrimePremium, RateFloor,
-    LineName, LineNumber, DraftAccountNumber, DdaNumber,
-    ApprovedAmount, ConstructionSublimit, Line, Over21Fee,
-    NonUsedLimit, NonUsedFeeTC, NonUsedFee,
-    CurtailmentBalance, CurtailmentInterestMtd, ConstSubLimitUnused
-)
-SELECT
-    CreditLineID, PeriodEndDate, PeriodInterest, PeriodFee, Balance,
-    PeriodAdjustmentInterest, Rate, Fee, PrimeLibor, PrimePremium, RateFloor,
-    LineName, LineNumber, DraftAccountNumber, DdaNumber,
-    ApprovedAmount, ConstructionSublimit, Line, Over21Fee,
-    NonUsedLimit, NonUsedFeeTC, NonUsedFee,
-    CurtailmentBalance, CurtailmentInterestMtd, ConstSubLimitUnused
-FROM [LoanTracking_X].[dbo].[CreditLineHistory]
-WHERE PeriodEndDate = '2026-08-31';
-
-SELECT @@ROWCOUNT AS CreditLineHistory_Inserted;
-
--- ── Verify counts match source ────────────────────────────────
-SELECT 'LoanHistory' AS TableName,
-       (SELECT COUNT(*) FROM [LoanTracking_X].[dbo].[LoanHistory]
-        WHERE PeriodEndDate = '2026-08-31') AS SourceRows,
-       (SELECT COUNT(*) FROM LoanHistory
-        WHERE PeriodEndDate = '2026-08-31') AS TargetRows
-UNION ALL
-SELECT 'CreditLineHistory',
-       (SELECT COUNT(*) FROM [LoanTracking_X].[dbo].[CreditLineHistory]
-        WHERE PeriodEndDate = '2026-08-31'),
-       (SELECT COUNT(*) FROM CreditLineHistory
-        WHERE PeriodEndDate = '2026-08-31');
-
--- ── Fee sanity check — should be non-zero ─────────────────────
-SELECT SUM(ISNULL(CheckOnlyFee,0) + ISNULL(WireFee,0) + ISNULL(AdjustmentFee,0)) AS FeeTotal,
-       SUM(ISNULL(CheckFee,0)) AS CheckFeeTotal
-FROM LoanHistory WHERE PeriodEndDate = '2026-08-31';
-
--- COMMIT TRANSACTION;
--- ROLLBACK TRANSACTION;
-GO
+    IF (@AlreadyClosed IS NULL OR @AlreadyClosed < @PriorPeriodEnd)
+        EXECUTE dbo.up_ProcessMonthEndDataV2 @PriorPeriodEnd, @ID, @UserName;
+END
